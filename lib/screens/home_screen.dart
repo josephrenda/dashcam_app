@@ -21,11 +21,21 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _permissionsGranted = false;
   bool _isInitializing = false;
+  String _debugLog = 'App Started\n';
+  bool _showDebugOverlay = true;
 
   @override
   void initState() {
     super.initState();
+    _addDebugLog('initState called');
     _requestPermissions();
+  }
+
+  void _addDebugLog(String message) {
+    setState(() {
+      _debugLog += '${DateTime.now().toIso8601String().substring(11, 19)}: $message\n';
+    });
+    debugPrint('🔍 DEBUG: $message');
   }
 
   @override
@@ -39,14 +49,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _requestPermissions() async {
+    _addDebugLog('Requesting permissions...');
+    
     final cameraStatus = await Permission.camera.request();
+    _addDebugLog('Camera permission: $cameraStatus');
+    
     final micStatus = await Permission.microphone.request();
+    _addDebugLog('Microphone permission: $micStatus');
+    
     final locationStatus = await Permission.location.request();
+    _addDebugLog('Location permission: $locationStatus');
 
     if (cameraStatus.isGranted && micStatus.isGranted && locationStatus.isGranted) {
+      _addDebugLog('✅ All permissions granted!');
       setState(() => _permissionsGranted = true);
       _initializeCamera();
     } else {
+      _addDebugLog('❌ Permissions denied!');
       _showPermissionDialog();
     }
   }
@@ -80,18 +99,67 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _initializeCamera() async {
-    if (_isInitializing) return;
+    if (_isInitializing) {
+      _addDebugLog('Already initializing, skipping...');
+      return;
+    }
     
+    _addDebugLog('Starting camera initialization...');
+    _addDebugLog('Available cameras: ${cameras.length}');
     setState(() => _isInitializing = true);
 
     try {
       final cameraProvider = context.read<CameraProvider>();
+      _addDebugLog('Calling cameraProvider.initialize()...');
       await cameraProvider.initialize(cameras);
-    } catch (e) {
-      _showError('Failed to initialize: $e');
+      _addDebugLog('✅ Camera initialized successfully!');
+    } catch (e, stackTrace) {
+      _addDebugLog('❌ Initialize error: $e');
+      _showError('Failed to initialize: $e\n\nStackTrace: $stackTrace');
+      _showDebugDialog('Camera Initialization Failed', e.toString(), stackTrace.toString());
     } finally {
       setState(() => _isInitializing = false);
     }
+  }
+
+  void _showDebugDialog(String title, String error, String stackTrace) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Error:', style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 4),
+              Text(error),
+              SizedBox(height: 16),
+              Text('Stack Trace:', style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 4),
+              Text(
+                stackTrace,
+                style: TextStyle(fontSize: 10, fontFamily: 'monospace'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _initializeCamera();
+            },
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showError(String message) {
@@ -108,51 +176,147 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_permissionsGranted) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.warning, size: 64, color: Colors.orange),
-              const SizedBox(height: 16),
-              const Text(
-                'Camera permissions required',
-                style: TextStyle(fontSize: 18),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _requestPermissions,
-                child: const Text('Grant Permissions'),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => openAppSettings(),
-                child: const Text('Open Settings'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Consumer<CameraProvider>(
-      builder: (context, cameraProvider, child) {
-        if (!cameraProvider.isInitialized) {
-          return const Scaffold(
+    return Stack(
+      children: [
+        if (!_permissionsGranted)
+          Scaffold(
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Initializing camera...'),
+                  const Icon(Icons.warning, size: 64, color: Colors.orange),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Camera permissions required',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _requestPermissions,
+                    child: const Text('Grant Permissions'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => openAppSettings(),
+                    child: const Text('Open Settings'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          _buildMainContent(),
+        
+        // Debug overlay
+        if (_showDebugOverlay)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              color: Colors.black.withOpacity(0.8),
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'DEBUG LOG',
+                        style: TextStyle(
+                          color: Colors.yellow,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => setState(() => _showDebugOverlay = false),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    height: 200,
+                    child: SingleChildScrollView(
+                      child: Text(
+                        _debugLog,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      ElevatedButton(
+                        onPressed: _requestPermissions,
+                        child: const Text('Check Permissions'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _initializeCamera,
+                        child: const Text('Retry Camera'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        
+        // Toggle debug button
+        if (!_showDebugOverlay)
+          Positioned(
+            top: 40,
+            right: 16,
+            child: FloatingActionButton(
+              mini: true,
+              backgroundColor: Colors.yellow,
+              onPressed: () => setState(() => _showDebugOverlay = true),
+              child: const Icon(Icons.bug_report, color: Colors.black),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMainContent() {
+
+    return Consumer<CameraProvider>(
+      builder: (context, cameraProvider, child) {
+        if (!cameraProvider.isInitialized) {
+          _addDebugLog('Waiting for camera to initialize...');
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  const Text('Initializing camera...'),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Available cameras: ${cameras.length}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      _addDebugLog('Manual retry button pressed');
+                      _initializeCamera();
+                    },
+                    child: const Text('Retry Initialization'),
+                  ),
                 ],
               ),
             ),
           );
         }
 
+        _addDebugLog('Camera initialized, showing UI');
         return Scaffold(
           body: Stack(
             children: [

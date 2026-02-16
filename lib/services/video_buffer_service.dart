@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/material.dart';
 import '../config/app_config.dart';
 import '../services/database_service.dart';
 
@@ -18,9 +19,14 @@ class VideoBufferService {
   DateTime? _segmentStartTime;
 
   Future<void> initialize(CameraController controller) async {
+    debugPrint('📼 VideoBufferService.initialize() called');
     _controller = controller;
+    debugPrint('📼 Getting buffer directory...');
     _bufferDirectory = await _getBufferDirectory();
+    debugPrint('📼 Buffer directory: ${_bufferDirectory!.path}');
+    debugPrint('📼 Clearing old segments...');
     await _clearOldSegments();
+    debugPrint('✅ VideoBufferService initialized successfully');
   }
 
   Future<Directory> _getBufferDirectory() async {
@@ -46,30 +52,48 @@ class VideoBufferService {
   }
 
   Future<void> startCircularRecording() async {
-    if (_controller == null || _isRecording) return;
+    debugPrint('📼 startCircularRecording() called');
+    if (_controller == null) {
+      debugPrint('❌ Controller is null!');
+      return;
+    }
+    if (_isRecording) {
+      debugPrint('⚠️ Already recording!');
+      return;
+    }
+    debugPrint('📼 Starting first segment...');
     await _recordNextSegment();
   }
 
   Future<void> _recordNextSegment() async {
-    if (_controller == null || !_controller!.value.isInitialized) return;
+    if (_controller == null || !_controller!.value.isInitialized) {
+      debugPrint('❌ Cannot record: controller=${_controller != null}, initialized=${_controller?.value.isInitialized}');
+      return;
+    }
 
     try {
       _segmentStartTime = DateTime.now();
       final timestamp = _segmentStartTime!.millisecondsSinceEpoch;
       final segmentPath = '${_bufferDirectory!.path}/segment_$timestamp.mp4';
+      debugPrint('🔴 Starting video recording to: $segmentPath');
 
       await _controller!.startVideoRecording();
       _isRecording = true;
+      debugPrint('✅ Video recording started');
 
       // Schedule next segment
+      debugPrint('⏱️ Waiting $_segmentDuration seconds for next segment...');
       await Future.delayed(Duration(seconds: _segmentDuration));
       
       if (_isRecording) {
+        debugPrint('🔴 Stopping current segment and starting next...');
         await _stopAndSaveSegment(segmentPath);
         await _recordNextSegment();
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       _isRecording = false;
+      debugPrint('❌ Failed to record segment: $e');
+      debugPrint('Stack trace: $stackTrace');
       throw Exception('Failed to record segment: $e');
     }
   }

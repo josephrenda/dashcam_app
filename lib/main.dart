@@ -13,8 +13,12 @@ Future<void> main() async {
   
   try {
     cameras = await availableCameras();
+    debugPrint('✅ Successfully loaded ${cameras.length} cameras');
+    for (var i = 0; i < cameras.length; i++) {
+      debugPrint('Camera $i: ${cameras[i].name} - ${cameras[i].lensDirection}');
+    }
   } catch (e) {
-    debugPrint('Error loading cameras: $e');
+    debugPrint('❌ Error loading cameras: $e');
   }
   
   runApp(const DashCamApp());

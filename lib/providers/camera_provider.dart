@@ -20,7 +20,7 @@ class CameraProvider extends ChangeNotifier {
   bool _isVoiceListening = false;
 
   CameraController? get controller => _controller;
-  bool get isInitialized => _isInitialized;
+  bool get isInitialized => _isInitialized; 
   bool get isRecording => _isRecording;
   DisplayMode get displayMode => _displayMode;
   Position? get currentPosition => _currentPosition;
@@ -29,10 +29,15 @@ class CameraProvider extends ChangeNotifier {
   bool get isVoiceListening => _isVoiceListening;
 
   Future<void> initialize(List<CameraDescription> cameras) async {
+    debugPrint('📷 CameraProvider.initialize() called');
+    debugPrint('📷 Number of cameras: ${cameras.length}');
+    
     if (cameras.isEmpty) {
+      debugPrint('❌ No cameras available!');
       throw Exception('No cameras available');
     }
 
+    debugPrint('📷 Creating CameraController for ${cameras.first.name}');
     _controller = CameraController(
       cameras.first,
       ResolutionPreset.high,
@@ -40,20 +45,34 @@ class CameraProvider extends ChangeNotifier {
     );
 
     try {
+      debugPrint('📷 Initializing controller...');
       await _controller!.initialize();
+      debugPrint('✅ Controller initialized successfully');
+      
+      debugPrint('📷 Initializing VideoBufferService...');
       await VideoBufferService.instance.initialize(_controller!);
+      debugPrint('✅ VideoBufferService initialized');
+      
       _isInitialized = true;
       notifyListeners();
+      debugPrint('✅ notifyListeners() called');
       
       // Start circular recording
+      debugPrint('📷 Starting recording...');
       await startRecording();
       
       // Start location tracking
+      debugPrint('📏 Starting location tracking...');
       _startLocationTracking();
       
       // Initialize voice commands
+      debugPrint('🎤 Initializing voice commands...');
       await _initializeVoiceCommands();
-    } catch (e) {
+      
+      debugPrint('✅ Camera provider fully initialized!');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Failed to initialize camera: $e');
+      debugPrint('Stack trace: $stackTrace');
       throw Exception('Failed to initialize camera: $e');
     }
   }
@@ -118,13 +137,20 @@ class CameraProvider extends ChangeNotifier {
   }
 
   Future<void> startRecording() async {
-    if (_isRecording || !_isInitialized) return;
+    if (_isRecording || !_isInitialized) {
+      debugPrint('⚠️ Cannot start recording - isRecording: $_isRecording, isInitialized: $_isInitialized');
+      return;
+    }
     
     try {
+      debugPrint('🔴 Starting circular recording...');
       await VideoBufferService.instance.startCircularRecording();
       _isRecording = true;
       notifyListeners();
-    } catch (e) {
+      debugPrint('✅ Recording started successfully');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Failed to start recording: $e');
+      debugPrint('Stack trace: $stackTrace');
       throw Exception('Failed to start recording: $e');
     }
   }
@@ -163,6 +189,7 @@ class CameraProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  @override
   Future<void> dispose() async {
     await stopVoiceListening();
     VoiceCommandService.instance.dispose();

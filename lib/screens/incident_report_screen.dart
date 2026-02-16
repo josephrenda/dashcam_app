@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/clip_model.dart';
 import '../models/incident_model.dart';
-import '../models/user_model.dart';
 import '../providers/incident_provider.dart';
 import '../providers/auth_provider.dart';
 
